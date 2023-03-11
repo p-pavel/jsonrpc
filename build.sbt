@@ -1,4 +1,4 @@
-name := "scratch-link"
+name         := "scratch-link"
 scalaVersion := "3.2.2"
 scalacOptions ++= Seq(
   "-Xcheck-macros",
@@ -19,4 +19,15 @@ libraryDependencies ++= Seq(
 )
 
 libraryDependencies += "org.typelevel" %% "cats-effect-kernel" % "3.4.8"
-libraryDependencies += "com.outr" %% "scribe" % "3.11.1"
+
+libraryDependencies += "com.outr" %% "scribe-cats" % "3.11.1"
+
+val circeVersion = "0.14.5"
+
+libraryDependencies ++= Seq(
+  "circe-core",
+  "circe-generic",
+  "circe-parser"
+).map("io.circe" %% _ % circeVersion)
+
+libraryDependencies += "com.outr" %% "scribe-slf4j" % "3.11.1"
