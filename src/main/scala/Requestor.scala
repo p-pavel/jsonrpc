@@ -20,7 +20,18 @@ object Requestor:
       mapRef     <- Ref.of(Map.empty[Int, Deferred[F, Resp]])
       counterRef <- Ref.of(0)
     yield new Requestor[F, Int, Req, Resp]:
-      override def processResponse(id: Int, resp: Resp): F[Boolean] = ???
+      override def processResponse(id: Int, resp: Resp): F[Boolean] =
+        def complete(d: Option[Deferred[F, Resp]]): F[Boolean] =
+          d.map(
+            _.complete(resp).reject { case false =>
+              AssertionError("Internal error -- repeated completion")
+            }
+          ).getOrElse(false.pure)
+
+        mapRef
+          .getAndUpdate(_ - id)
+          .map(_.get(id))
+          .flatMap(complete)
 
       override def makeRequest(req: Req, timeout: FiniteDuration): F[Resp] =
         for
