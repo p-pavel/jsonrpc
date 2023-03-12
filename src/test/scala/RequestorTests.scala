@@ -22,14 +22,25 @@ class RequestorTests extends munit.CatsEffectSuite:
   }
 
   test("single reply") {
-    (for
+    for
       resp <- Deferred[IO, Requestor.WithId[Resp]]
       r    <- requestor((id, req) => resp.complete((id, req.reverse)).assert)
       res  <-
         (r.makeRequest("hello"), resp.get.flatMap(r.processResponse)).parTupled
-    yield res == ("olleh", true)).assert
+      _    <- assertIO(IO(res), ("olleh", true), "Bad response")
+      _    <- assertIO(
+                r.processResponse(0, "hello"),
+                false,
+                "Should detect repeated response"
+              )
+    yield ()
+
+  }
+
+  test("unknown response") {
+    requestor().flatMap(_.processResponse(1, "hello")).assertEquals(false)
   }
 
   test("out of order responses") {
-    //TODO: implement
+    // TODO: implement
   }

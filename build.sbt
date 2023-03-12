@@ -31,3 +31,6 @@ libraryDependencies ++= Seq(
 ).map("io.circe" %% _ % circeVersion)
 
 libraryDependencies += "com.outr" %% "scribe-slf4j" % "3.11.1"
+
+libraryDependencies += "org.typelevel" %% "munit-cats-effect-3" % "1.0.7" % Test
+
