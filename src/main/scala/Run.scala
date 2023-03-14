@@ -14,10 +14,6 @@ import scribe.LogRecord
 import scribe.message.LoggableMessage
 import java.util.concurrent.TimeoutException
 
-def tst = cats.effect.IOLocal(0)
-
-
-
 
 /** Example of connecting to the Scratch Link WebSocket server.
   *
@@ -35,21 +31,20 @@ object Run extends IOApp.Simple:
   import scribe.cats.*
   import org.http4s.*
   import cats.effect.std.*
+  import scala.concurrent.duration.*
 
   def client[F[_]: Async]: F[WSClient[F]] = JdkWSClient.simple
   val endpoint                            = uri"ws://localhost:20111/scratch/ble"
 
   override def run: IO[Unit] = connection[IO](endpoint).use(process)
 
-
   import fs2.*
   import scribe.Level.*
 
-  given [F[_]: Scribe]: Scribe[Stream[F, _]] =
+  given [F[_]: Scribe]: Scribe[Stream[F, _]]                                =
     record => Stream.eval(Scribe[F].log(record))
-  //implement mock log extension def function
-  extension [F[_]:FlatMap: Scribe, A](fa: F[A])
-    def log(l:scribe.Level, f: A => String = ((t: A) => t.toString)): F[A] =
+  extension [F[_]: FlatMap: Scribe, A](fa: F[A])
+    def log(l: scribe.Level, f: A => String = ((t: A) => t.toString)): F[A] =
       fa.flatMap(a => Scribe[F].log(l, summon, f(a)).as(a))
 
   def connection[F[_]: Async: Scribe](
@@ -58,20 +53,28 @@ object Run extends IOApp.Simple:
     Resource
       .eval(client)
       .flatMap(_.connectHighLevel(WSRequest(endpoint)))
-      .log(Warn, _ => s"Connected to $endpoint")
+      .log(Info, _ => s"Connected to $endpoint")
 
-  def process[F[_]: Scribe: Concurrent](
+  def testPacket(id: Any) =
+    s"""{"jsonrpc":"2.0","id":$id,"method":"discover","params":{
+      "filters": [
+        { "namePrefix": "BBC"}
+      ] 
+    }}"""
+  def process[F[_]: Scribe: Temporal](
       con: WSConnectionHighLevel[F]
   ): F[Unit] =
-    con.receiveStream
-      .log(Info, m => s"Received message: $m")
+    Stream
+      .iterate(0)(_ + 1)  
+      .metered(1000.millisecond).take(10000)
+      .evalMap(i => 
+        val pack = testPacket(i)
+        con
+          .send(WSFrame.Text(pack, true))
+          .log(Info, _ => s"Sent message: $pack")
+      )
+      .concurrently(con.receiveStream.log(Info, a => s"received: $a"))
       .compile
       .drain
 end Run
-
-import scala.concurrent.duration.*
-
-
-
-
 
