@@ -1,4 +1,4 @@
-package plans
+package com.perikov.scratchlink.plans
 
 object JsonRPC2Types:
   // TODO: sending batch requests
@@ -12,8 +12,8 @@ object JsonRPC2Types:
   private val jsonrpcVersion = "2.0"
 
   type Message    = Request | Notification | Response
-  type Packet     = Seq[Message] // TODO: batch rules not enforced
   type Response   = Success | Failure
+  type Packet     = Seq[Message] // TODO: batch rules not enforced
   case class Success(id: Long, result: Json)
   case class Failure(id: Long, error: RPCError)
   case class Request(id: Long, method: String, params: Parameters)
@@ -32,7 +32,6 @@ object JsonRPC2Types:
     case ServerError(override val code: Int)  extends ErrorCode(code)
     case UnkonwnError(override val code: Int) extends ErrorCode(code)
 
-
   given Encoder[Message] = Encoder.instance { m =>
     val map: Map[String, Json] = m match
       case Request(id, method, params)  =>
@@ -43,8 +42,10 @@ object JsonRPC2Types:
         )
       case Notification(method, params) =>
         Map("method" -> method.asJson, "params" -> params.asJson)
-      case Success(id, result)          => Map("id" -> id.asJson, "result" -> result)
-      case Failure(id, error)           => Map("id" -> id.asJson, "error" -> error.asJson)
+      case Success(id, result)          =>
+        Map("id" -> id.asJson, "result" -> result)
+      case Failure(id, error)           =>
+        Map("id" -> id.asJson, "error" -> error.asJson)
 
     (map + ("jsonrpc" -> jsonrpcVersion.asJson)).asJson
   }
@@ -71,7 +72,7 @@ object JsonRPC2Types:
         case c if c >= -32099 && c <= -32000 =>
           ServerError(c) // TODO: use refined
         case c                               => UnkonwnError(c)
-    
+
     given Encoder[RPCError] = Encoder.instance { e =>
       Map(
         "message" -> e.message.asJson,
@@ -120,6 +121,7 @@ object JsonRPC2Types:
       case (Some(id), _)         =>
         c.downField("error").as[RPCError].map(Failure(id, _)) orElse
           c.downField("result").as[Json].map(Success(id, _))
+      case _                     => Left(DecodingFailure("Invalid payload", c.history))
     }
 
 end JsonRPC2Types
