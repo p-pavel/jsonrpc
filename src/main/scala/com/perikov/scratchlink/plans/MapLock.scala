@@ -10,17 +10,22 @@ trait MapLock[F[_], K, V]:
     */
   def reserve(action: F[Unit])(key: K): F[Option[V]]
 
-  /** @return
+  /** the key is removed if it is present
+    * 
+   * @return
     *   [[true]] if the key was present and the value was fulfilled
+    * 
     */
   def fulfill(key: K, value: V): F[Boolean]
 
-object MapLock:
+object MapLock: 
   import cats.*
   import cats.data.OptionT
   import cats.implicits.*
   import cats.effect.*
   import cats.effect.implicits.*
+
+  import cats.effect.std.MapRef
 
   def apply[F[_], K, V](using F: MapLock[F, K, V]): MapLock[F, K, V] = F
 
@@ -37,10 +42,10 @@ object MapLock:
             def processDeferred(d: D) = d.get.guarantee(refMap.update(_ - key))
             val allocDeferred: F[Option[Deferred[F, V]]]         =
               Deferred[F, V].flatMap(d =>
-                refMap.modify { m =>
+                refMap.modify ( m =>
                   if m.contains(key) then (m, none)
                   else (m + (key -> d), d.some)
-                }
+                )
               )
             OptionT(allocDeferred).semiflatMap(processDeferred).value
           override def fulfill(key: K, value: V): F[Boolean]          =
