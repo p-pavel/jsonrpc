@@ -31,6 +31,10 @@ object utils:
       log(Error, msg, data*)
 
   object Logging:
+    transparent inline def apply[F[_]](using
+        logging: Logging[F]
+    ) =
+      logging
     given fromScribe[F[_]](using sc: Scribe[F]): Logging[F] with
       import scribe.{Level as ScribeLevel}
       type Level = ScribeLevel
