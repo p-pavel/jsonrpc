@@ -17,10 +17,11 @@ libraryDependencies ++=
 libraryDependencies ++= Seq(
   "org.http4s" %% "http4s-jdk-http-client" % "0.9.0"
 )
-libraryDependencies += "org.typelevel" %% "cats-laws" % "2.9.0" 
+libraryDependencies += "eu.timepit" %% "refined-cats" % "0.10.2"
+libraryDependencies += "org.typelevel" %% "cats-laws" % "2.9.0" % Test 
 
-libraryDependencies += "org.typelevel" %% "cats-effect" % "3.4.8"
-libraryDependencies += "org.typelevel" %% "cats-effect-laws" % "3.4.8" 
+libraryDependencies += "org.typelevel" %% "cats-effect" % "3.4.8" 
+libraryDependencies += "org.typelevel" %% "cats-effect-laws" % "3.4.8" % Test
 
 libraryDependencies += "com.outr" %% "scribe-cats" % "3.11.1"
 
