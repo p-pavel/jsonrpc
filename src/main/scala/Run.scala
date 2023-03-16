@@ -1,9 +1,12 @@
 package com.perikov.scratchlink
+import com.perikov.jsonrpc.{DatagramProto, JsonRPC2}
 import utils.*
 import cats.*
 import cats.implicits.*
 import cats.effect.*
 import cats.effect.implicits.*
+import io.circe.*
+import io.circe.syntax.*
 import fs2.*
 
 import org.http4s.client.websocket.*
@@ -13,7 +16,28 @@ import scribe.LoggerSupport
 import scribe.LogRecord
 import scribe.message.LoggableMessage
 import java.util.concurrent.TimeoutException
+import org.http4s.client.websocket.WSClientHighLevel
+import scribe.filter.OrFilters
 
+object ScratchLink:
+  import _root_.io.circe.generic.semiauto.*
+  trait DeviceFilter:
+    def encoder: Encoder.AsObject[this.type]
+  object DeviceFilter:
+    given Encoder.AsObject[DeviceFilter] = Encoder.AsObject.instance { f =>
+      f.encoder.encodeObject(f)
+    }
+  case class NamePrefix(namePrefix: String) extends DeviceFilter:
+    def encoder: Encoder.AsObject[this.type] =
+      deriveEncoder[NamePrefix.this.type]
+
+  case class Filters(filters: DeviceFilter*)
+  object Filters:
+    given Encoder.AsObject[Filters] = Encoder.AsObject.instance { f =>
+      JsonObject("filters" -> Json.arr(f.filters.map(_.asJson)*))
+    }
+
+end ScratchLink
 
 /** Example of connecting to the Scratch Link WebSocket server.
   *
@@ -33,10 +57,17 @@ object Run extends IOApp.Simple:
   import cats.effect.std.*
   import scala.concurrent.duration.*
 
-  def client[F[_]: Async]: F[WSClient[F]] = JdkWSClient.simple
-  val endpoint                            = uri"ws://localhost:20111/scratch/ble"
+  def client[F[_]: Async]: Resource[F, WSClientHighLevel[F]] =
+    Resource.eval(JdkWSClient.simple)
+  val endpoint                                               = uri"ws://localhost:20111/scratch/ble"
 
-  override def run: IO[Unit] = connection[IO](endpoint).use(process)
+  override def run: IO[Unit] = client[IO]
+    .flatMap { cl =>
+      val req                     = WSRequest(endpoint)
+      given WSClientHighLevel[IO] = cl
+      onWebSocket[IO](req).flatMap(JsonRPC2.onDatagramProto)
+    }
+    .use(process)
 
   import fs2.*
   import scribe.Level.*
@@ -47,13 +78,17 @@ object Run extends IOApp.Simple:
     def log(l: scribe.Level, f: A => String = ((t: A) => t.toString)): F[A] =
       fa.flatMap(a => Scribe[F].log(l, summon, f(a)).as(a))
 
-  def connection[F[_]: Async: Scribe](
-      endpoint: Uri
-  ): Resource[F, WSConnectionHighLevel[F]] =
-    Resource
-      .eval(client)
-      .flatMap(_.connectHighLevel(WSRequest(endpoint)))
-      .log(Info, _ => s"Connected to $endpoint")
+  def onWebSocket[F[_]: Logging: Applicative](
+      req: WSRequest
+  )(using cl: WSClientHighLevel[F]): Resource[F, DatagramProto[F, String]] =
+    cl.connectHighLevel(req).map { ws =>
+      new DatagramProto[F, String]:
+        def sendRequest(request: String): F[Unit]     =
+          Logging[F].info("SendDatagram", "datagram" -> request) *> ws
+            .send(WSFrame.Text(request))
+        def notificationStream: fs2.Stream[F, String] =
+          ws.receiveStream.collect { case WSFrame.Text(text, _) => text }
+    }
 
   def testPacket(id: Any) =
     s"""{"jsonrpc":"2.0","id":$id,"method":"discover","params":{
@@ -62,19 +97,34 @@ object Run extends IOApp.Simple:
       ] 
     }}"""
   def process[F[_]: Scribe: Temporal](
-      con: WSConnectionHighLevel[F]
+      con: JsonRPC2[F]
   ): F[Unit] =
-    Stream
-      .iterate(0)(_ + 1)  
-      .metered(1000.millisecond).take(10000)
-      .evalMap(i => 
-        val pack = testPacket(i)
+    val filters =
+      ScratchLink.Filters(ScratchLink.NamePrefix("BBC")).asJsonObject
+    (Stream
+      .awakeEvery(1.second)
+      .evalMap(i =>
         con
-          .send(WSFrame.Text(pack, true))
-          .log(Info, _ => s"Sent message: $pack")
+          .sendRequest("getVersion", List.empty)
+          .log(Info, a => s"response: $a")
+          .void
       )
-      .concurrently(con.receiveStream.log(Info, a => s"received: $a"))
+      .take(3) ++
+      Stream
+        .eval(
+          con
+            .sendRequest(
+              "discover",
+              filters
+            )
+            .log(Info, a => s"response: $a")
+            .void
+        )
+        .repeat
+        .metered(1.second))
+      .concurrently(
+        con.notificationStream.log(Info, a => s"received: $a")
+      )
       .compile
       .drain
 end Run
-
