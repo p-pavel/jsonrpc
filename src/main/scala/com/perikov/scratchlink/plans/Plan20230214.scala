@@ -61,8 +61,3 @@ object Plans extends IOApp.Simple:
 
   override def run: IO[Unit] = Plans[IO].apply()
 
-
-  @main def testDerivation: Unit =
-    import sourcecode.*
-    def tst(a: Int,b: Int)(using args: SourceValue[]) = println(args)
-    tst(34, 45)
