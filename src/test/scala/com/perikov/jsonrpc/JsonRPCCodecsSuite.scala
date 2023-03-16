@@ -69,7 +69,7 @@ class JsonRPCCodecsSuite extends munit.DisciplineSuite, ArbitraryInstances:
       Arbitrary.arbitrary[Failure]
     )
   )
-  inline def checkCodec[A: Codec: TypeName: Arbitrary: cats.Eq]: Unit =
+  inline def checkCodec[A: Codec.AsObject: TypeName: Arbitrary: cats.Eq]: Unit =
     checkAll(s"Codec[${typeName[A]}]", CodecTests[A].codec)
 
 

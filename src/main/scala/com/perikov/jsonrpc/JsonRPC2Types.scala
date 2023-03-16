@@ -18,7 +18,7 @@ object JsonRPC2Types:
   case class Failure(id: Long, error: RPCError)
   case class Request(id: Long, method: String, params: Parameters)
   case class Notification(method: String, params: Parameters)
-  type Parameters = JsonObject | List[Json]
+  type Parameters = JsonObject | List[Json]//TODO: Probably not the best way to pass params
 
   case class RPCError(message: String, code: ErrorCode, data: Option[Json])
   enum ErrorCode(val code: Int): // TODO: use literal types
@@ -32,7 +32,7 @@ object JsonRPC2Types:
     case ServerError(override val code: Int)  extends ErrorCode(code)
     case UnkonwnError(override val code: Int) extends ErrorCode(code)
 
-  given Encoder[Message] = Encoder.instance { m =>
+  given messageEncoder: Encoder.AsObject[Message] = Encoder.AsObject.instance { m =>
     val map: Map[String, Json] = m match
       case Request(id, method, params)  =>
         Map(
@@ -47,7 +47,7 @@ object JsonRPC2Types:
       case Failure(id, error)           =>
         Map("id" -> id.asJson, "error" -> error.asJson)
 
-    (map + ("jsonrpc" -> jsonrpcVersion.asJson)).asJson
+    (map + ("jsonrpc" -> jsonrpcVersion.asJson)).asJsonObject
   }
 
   given Codec[Parameters] = Codec.from(
@@ -111,7 +111,7 @@ object JsonRPC2Types:
     c.downArray.as[Seq[Message]].orElse(c.as[Message].map(Seq(_)))
   }
 
-  given messageCodec: Codec[Message] = Codec.from(given_Decoder_Message, given_Encoder_Message)
+  given messageCodec: Codec.AsObject[Message] = Codec.AsObject.from(given_Decoder_Message, messageEncoder)
 
   given Eq[Message] with
     def eqv(x: Message, y: Message): Boolean =
