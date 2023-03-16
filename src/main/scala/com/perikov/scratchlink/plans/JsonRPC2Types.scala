@@ -60,6 +60,12 @@ object JsonRPC2Types:
       case l: List[Json] => l.asJson
     }
   )
+
+  given Eq[Parameters] = Eq.instance {
+    case (o1: JsonObject, o2: JsonObject) => o1 == o2
+    case (l1: List[Json], l2: List[Json]) => l1 == l2
+    case _                               => false
+  }
   object RPCError:
     def decode(c: Int): ErrorCode =
       import ErrorCode.*
@@ -105,6 +111,17 @@ object JsonRPC2Types:
     c.downArray.as[Seq[Message]].orElse(c.as[Message].map(Seq(_)))
   }
 
+  given messageCodec: Codec[Message] = Codec.from(given_Decoder_Message, given_Encoder_Message)
+
+  given Eq[Message] with
+    def eqv(x: Message, y: Message): Boolean =
+      (x, y) match
+        case (a: Request, b: Request)           => a == b
+        case (a: Notification, b: Notification) => a == b
+        case (a: Success, b: Success)           => a == b
+        case (a: Failure, b: Failure)           => a == b
+        case _                                  => false
+  
   private def decodePayload(c: ACursor): Either[DecodingFailure, Message] =
     (
       c.downField("id").as[Option[Long]],
