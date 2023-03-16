@@ -29,7 +29,7 @@ object JsonRPC2:
   object Timeout:
     given Conversion[FiniteDuration, Timeout] = identity
     given Conversion[Timeout, FiniteDuration] = identity
-    given Timeout                             = 1000.second
+    given Timeout                             = 1.second
   end Timeout
   def onDatagramProto[F[_]: Concurrent: Temporal](
       proto: DatagramProto[F, String]
