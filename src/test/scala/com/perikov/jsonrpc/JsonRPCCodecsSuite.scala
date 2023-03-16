@@ -1,18 +1,16 @@
-package com.perikov.scratchlink
+package com.perikov.jsonrpc
 
 import cats.Eq
-import com.perikov.scratchlink.plans.JsonRPC2Types
 import com.perikov.utils.macros.*
 import io.circe.{Codec, Json, JsonObject}
 import io.circe.syntax.*
 import io.circe.testing.{ArbitraryInstances, CodecTests}
 import munit.{Location, TestOptions}
 import org.scalacheck.{Arbitrary, Gen}
-import org.typelevel.discipline.Laws
 
 import scala.quoted.*
-import org.scalacheck
 
+import com.perikov.jsonrpc.JsonRPC2Types
 class JsonRPCCodecsSuite extends munit.DisciplineSuite, ArbitraryInstances:
   import JsonRPC2Types.{*, given}
   override protected def scalaCheckTestParameters =

@@ -1,4 +1,4 @@
-package com.perikov.scratchlink.plans
+package com.perikov.jsonrpc
 
 import scala.concurrent.duration.*
 import cats.effect.*

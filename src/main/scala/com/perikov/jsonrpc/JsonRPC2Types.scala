@@ -1,4 +1,4 @@
-package com.perikov.scratchlink.plans
+package com.perikov.jsonrpc
 
 object JsonRPC2Types:
   // TODO: sending batch requests

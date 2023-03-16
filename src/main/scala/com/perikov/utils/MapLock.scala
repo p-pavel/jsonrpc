@@ -1,4 +1,4 @@
-package com.perikov.scratchlink.plans
+package com.perikov.utils
 
 trait MapLock[F[_], K, V]:
   /** @param action
