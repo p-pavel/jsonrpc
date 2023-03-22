@@ -123,9 +123,9 @@ object Run extends IOApp.Simple:
         )
         .repeat
         .metered(1.second))
-      .concurrently(
-        con.notificationStream.log(Info, a => s"received: $a")
-      )
+      // .concurrently(
+      //   con.notificationStream.log(Info, a => s"received: $a")
+      // )
       .compile
       .drain
 end Run

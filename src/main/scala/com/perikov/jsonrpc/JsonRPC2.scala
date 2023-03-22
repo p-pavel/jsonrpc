@@ -10,7 +10,6 @@ import fs2.Stream
 import io.circe.*
 import io.circe.syntax.*
 
-
 trait JsonRPC2[F[_]]:
   import JsonRPC2Types.*
   import JsonRPC2.Timeout
@@ -36,53 +35,69 @@ object JsonRPC2:
       proto: DatagramProto[F, String]
   ): Resource[F, JsonRPC2[F]] =
     import JsonRPC2Types.{*, given}
+
     type ReqId = Long
     val resources =
-      (MapLock.create[ReqId, Either[RPCError, Json], F], Ref.of(0L), fs2.concurrent.Topic[F, Notification])
+      (
+        MapLock.create[ReqId, Either[RPCError, Json], F],
+        Ref.of(0L),
+        fs2.concurrent.Topic[F, Notification]
+      )
 
-    Resource.eval(resources.tupled).map { (mapLock, idRef, topic) =>
-      def sendMessage(m: Message): F[Unit] = proto.sendRequest(m.asJson.noSpaces)
+    Resource
+      .eval(resources.tupled)
+      .flatMap { (mapLock, idRef, topic) =>
+        def sendMessage(m: Message): F[Unit] =
+          proto.sendRequest(m.asJson.noSpaces)
 
-      new JsonRPC2[F]:
+        def processIncomingMessage(m: Message): F[Option[Notification]] =
+          m match
+            case s: Success      =>
+              mapLock.fulfill(s.id, Right(s.result)).as(None)
+            case f: Failure      =>
+              mapLock.fulfill(f.id, Left(f.error)).as(None)
+            case r: Request      => none.pure // TODO: log
+            case n: Notification => n.some.pure
 
-        override def sendRequest(method: String, params: Parameters)(using
-            timeout: Timeout
-        ): F[Either[RPCError, Json]] =
-          idRef
-            .updateAndGet(_ + 1)
-            .flatMap { id =>
-              mapLock
-                .reserve(id, sendMessage(Request(id, method, params)))
-                .timeout(timeout)
-                .flatMap {
-                  case Some(result) => result.pure
-                  case None         => AssertionError("Can't reserve id").raiseError
-                }
-            }
-        override def sendNotification(
-            method: String,
-            params: Parameters
-        ): F[Unit] = sendMessage(Notification(method, params))
-
-        override def notificationStream: Stream[F, Notification] =
+        val processIncompingStream: Resource[F, Unit] =
           proto.notificationStream
-            .map {
-              parser.decode[Packet]
-            }
+            .map(parser.decode[Packet])
             .flatMap {
               case Right(packet) => Stream.emits(packet)
               case Left(_)       => Stream.empty // TODO: log
             }
-            .flatMap {
-              case n: Notification => Stream.emit(n)
-              case s: Success      =>
-                Stream.exec(
-                  mapLock.fulfill(s.id, Right(s.result)).void
-                ) // TODO: log orphane responses
-              case f: Failure      =>
-                Stream
-                  .exec(mapLock.fulfill(f.id, Left(f.error)).void) // TODO: log
-              case r: Request      => Stream.empty // TODO: log
-            }
+            .evalMap(processIncomingMessage)
+            .unNone
+            .through(topic.publish)
+            .compile
+            .drain
+            .background
+            .void
 
-    }
+        processIncompingStream.as(
+          new JsonRPC2[F]:
+
+            override def sendRequest(method: String, params: Parameters)(using
+                timeout: Timeout
+            ): F[Either[RPCError, Json]] =
+              idRef
+                .updateAndGet(_ + 1)
+                .flatMap { id =>
+                  mapLock
+                    .reserve(id, sendMessage(Request(id, method, params)))
+                    .flatMap {
+                      case Some(result) => result.pure
+                      case None         => AssertionError("Can't reserve id").raiseError
+                    }
+                    .timeout(timeout)
+                }
+            override def sendNotification(
+                method: String,
+                params: Parameters
+            ): F[Unit] = sendMessage(Notification(method, params))
+
+            override def notificationStream: Stream[F, Notification] =
+              topic.subscribe(5)
+        )
+
+      }
