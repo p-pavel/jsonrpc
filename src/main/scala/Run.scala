@@ -1,6 +1,6 @@
 package com.perikov.scratchlink
 import com.perikov.jsonrpc.{DatagramProto, JsonRPC2}
-import utils.*
+import com.perikov.utils.Logging
 import cats.*
 import cats.implicits.*
 import cats.effect.*
@@ -19,6 +19,7 @@ import java.util.concurrent.TimeoutException
 import org.http4s.client.websocket.WSClientHighLevel
 import scribe.filter.OrFilters
 
+import com.perikov.utils.Logging
 object ScratchLink:
   import _root_.io.circe.generic.semiauto.*
   trait DeviceFilter:
@@ -109,7 +110,7 @@ object Run extends IOApp.Simple:
           .log(Info, a => s"response: $a")
           .void
       )
-      .take(3) ++
+      .take(300) ++
       Stream
         .eval(
           con

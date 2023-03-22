@@ -10,6 +10,7 @@ import fs2.Stream
 import io.circe.*
 import io.circe.syntax.*
 
+
 trait JsonRPC2[F[_]]:
   import JsonRPC2Types.*
   import JsonRPC2.Timeout
@@ -37,9 +38,9 @@ object JsonRPC2:
     import JsonRPC2Types.{*, given}
     type ReqId = Long
     val resources =
-      (MapLock.create[ReqId, Either[RPCError, Json], F], Ref.of(0L))
+      (MapLock.create[ReqId, Either[RPCError, Json], F], Ref.of(0L), fs2.concurrent.Topic[F, Notification])
 
-    Resource.eval(resources.tupled).map { (mapLock, idRef) =>
+    Resource.eval(resources.tupled).map { (mapLock, idRef, topic) =>
       def sendMessage(m: Message): F[Unit] = proto.sendRequest(m.asJson.noSpaces)
 
       new JsonRPC2[F]:

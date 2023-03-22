@@ -4,7 +4,7 @@ import cats.*
 import cats.effect.*
 import cats.effect.implicits.*
 import cats.implicits.*
-import com.perikov.scratchlink.utils.Logging
+import com.perikov.utils.Logging
 import scala.concurrent.duration.*
 
 trait MicroBit[F[_]]:
