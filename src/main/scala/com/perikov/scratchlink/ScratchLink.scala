@@ -21,7 +21,7 @@ trait ScratchLink[F[_]]:
   def read(): Res[Unspecified]
   def startNotifications(): Res[Unspecified]
   def stopNotifications(): Res[Unspecified]
-  def getServices(): Res[Unspecified]
+  def getServices(): Res[List[String]] //TODO: Seq?
   val notificationStream: Stream[F, Notification]
 
 object ScratchLink:
@@ -80,6 +80,8 @@ object ScratchLink:
   import io.circe.Decoder
   def apply[F[_]: ScratchLink]: ScratchLink[F]          = summon
   def onRPC[F[_]: Functor](rpc: JsonRPC2[F]): ScratchLink[F] =
+    import concurrent.duration.*
+    given JsonRPC2.Timeout = 10.seconds //TODO: What to do with timeout? Res with context?
     new ScratchLink[F]:
       type Unspecified = Json
       def toRPCError(d: DecodingFailure, json: Json): RPCError =
@@ -109,13 +111,14 @@ object ScratchLink:
         send("connect", Map("peripheralId" -> deviceId.asJson).asJsonObject)
       def discover(filters: Filters): Res[Unit]                   =
         send("discover", filters.asJsonObject)
-      def getServices(): Res[Json]                                = ???
+      def getServices(): Res[List[String]]                                = 
+        send("getServices", List())
       def getVersion: Res[Version]                                =
         send[ProtocolVersion]("getVersion", List()).map(_.protocol)
       val notificationStream: Stream[F, Notification] =
         import Notification.*
         rpc.notificationStream.map(asScratchNotification)
-      def read(): Res[Json]                                       = ???
+      def read(characteristicId: String): Res[Json]                                       = ???
       def startNotifications(): Res[Json]                         = ???
       def write(): Res[Json]                                      = ???
 

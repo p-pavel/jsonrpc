@@ -69,7 +69,9 @@ object Run extends IOApp.Simple:
           Logging[F].info("SendDatagram", "datagram" -> request) *> ws
             .send(WSFrame.Text(request))
         def notificationStream: fs2.Stream[F, String] =
-          ws.receiveStream.collect { case WSFrame.Text(text, _) => text }
+          ws.receiveStream.collect { case WSFrame.Text(text, _) => text }.evalTap(s =>
+            Logging[F].info("ReceivedDatagram", "datagram" -> s)
+          )
     }
 
   def testPacket(id: Any) =
@@ -92,19 +94,31 @@ object Run extends IOApp.Simple:
       )
       .take(3) ++
       Stream
-        .eval(
+        .exec(
           scratch
-            .discover(
-              filters
-            )
+            .discover(filters)
             .value
             .log(Info, a => s"response: $a")
             .void
-        )
-        .repeat
-        .metered(1.second))
+        ) ++
+      Stream.exec(Concurrent[F].sleep(10.seconds)) ++
+      Stream.exec(Logging[F].info("Connecting")) ++
+      Stream
+        .eval {
+
+          scratch
+            .connect("603CAEE8-3B9A-CEB4-488A-2E6009018486")
+            .value
+            .log(Info, a => s"response: $a")
+            .void
+        } ++
+      Stream.exec(
+        scratch.getServices().value.log(Info, a => s"response: $a").void
+      ))
       .concurrently(
-        scratch.notificationStream.log(Info, a => s"received: $a")
+        scratch.notificationStream.evalTap(a =>
+          Logging[F].info(s"received: $a")
+        )
       )
       .compile
       .drain
