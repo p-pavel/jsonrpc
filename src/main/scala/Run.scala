@@ -20,25 +20,6 @@ import org.http4s.client.websocket.WSClientHighLevel
 import scribe.filter.OrFilters
 
 import com.perikov.utils.Logging
-object ScratchLink:
-  import _root_.io.circe.generic.semiauto.*
-  trait DeviceFilter:
-    def encoder: Encoder.AsObject[this.type]
-  object DeviceFilter:
-    given Encoder.AsObject[DeviceFilter] = Encoder.AsObject.instance { f =>
-      f.encoder.encodeObject(f)
-    }
-  case class NamePrefix(namePrefix: String) extends DeviceFilter:
-    def encoder: Encoder.AsObject[this.type] =
-      deriveEncoder[NamePrefix.this.type]
-
-  case class Filters(filters: DeviceFilter*)
-  object Filters:
-    given Encoder.AsObject[Filters] = Encoder.AsObject.instance { f =>
-      JsonObject("filters" -> Json.arr(f.filters.map(_.asJson)*))
-    }
-
-end ScratchLink
 
 /** Example of connecting to the Scratch Link WebSocket server.
   *
@@ -88,7 +69,9 @@ object Run extends IOApp.Simple:
           Logging[F].info("SendDatagram", "datagram" -> request) *> ws
             .send(WSFrame.Text(request))
         def notificationStream: fs2.Stream[F, String] =
-          ws.receiveStream.collect { case WSFrame.Text(text, _) => text }
+          ws.receiveStream.collect { case WSFrame.Text(text, _) => text }.evalTap(s =>
+            Logging[F].info("ReceivedDatagram", "datagram" -> s)
+          )
     }
 
   def testPacket(id: Any) =
@@ -100,32 +83,43 @@ object Run extends IOApp.Simple:
   def process[F[_]: Scribe: Temporal](
       con: JsonRPC2[F]
   ): F[Unit] =
-    val filters =
-      ScratchLink.Filters(ScratchLink.NamePrefix("BBC")).asJsonObject
+    val filters = ScratchLink.Filters(ScratchLink.NamePrefix("BBC"))
+    val scratch = ScratchLink.onRPC(con)
     (Stream
       .awakeEvery(1.second)
       .evalMap(i =>
-        con
-          .sendRequest("getVersion", List.empty)
+        scratch.getVersion.value
           .log(Info, a => s"response: $a")
           .void
       )
-      .take(300) ++
+      .take(3) ++
       Stream
-        .eval(
-          con
-            .sendRequest(
-              "discover",
-              filters
-            )
+        .exec(
+          scratch
+            .discover(filters)
+            .value
             .log(Info, a => s"response: $a")
             .void
+        ) ++
+      Stream.exec(Concurrent[F].sleep(10.seconds)) ++
+      Stream.exec(Logging[F].info("Connecting")) ++
+      Stream
+        .eval {
+
+          scratch
+            .connect("603CAEE8-3B9A-CEB4-488A-2E6009018486")
+            .value
+            .log(Info, a => s"response: $a")
+            .void
+        } ++
+      Stream.exec(
+        scratch.getServices().value.log(Info, a => s"response: $a").void
+      ))
+      .concurrently(
+        scratch.notificationStream.evalTap(a =>
+          Logging[F].info(s"received: $a")
         )
-        .repeat
-        .metered(1.second))
-      // .concurrently(
-      //   con.notificationStream.log(Info, a => s"received: $a")
-      // )
+      )
       .compile
       .drain
 end Run

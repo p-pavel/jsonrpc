@@ -17,7 +17,7 @@ trait JsonRPC2[F[_]]:
   // TODO: provide typed request and response
   def sendRequest(method: String, params: Parameters)(using
       timeout: Timeout
-  ): F[Either[RPCError, Json]]
+  ): F[Either[RPCError, Json]] //TODO: params may be ommited
 
   def sendNotification(method: String, params: Parameters): F[Unit]
 
