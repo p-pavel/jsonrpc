@@ -61,11 +61,10 @@ object JsonRPC2Types:
     }
   )
 
-  given Eq[Parameters] = Eq.instance {
+  given Eq[Parameters] = Eq.instance:
     case (o1: JsonObject, o2: JsonObject) => o1 == o2
     case (l1: List[Json], l2: List[Json]) => l1 == l2
     case _                               => false
-  }
   object RPCError:
     def decode(c: Int): ErrorCode =
       import ErrorCode.*
@@ -126,7 +125,7 @@ object JsonRPC2Types:
     (
       c.downField("id").as[Option[Long]],
       c.downField("method").as[Option[String]]
-    ).tupled.flatMap {
+    ).tupled.flatMap:
       case (idOpt, Some(method)) =>
         c.downField("params")
           .as[Parameters]
@@ -139,6 +138,5 @@ object JsonRPC2Types:
         c.downField("error").as[RPCError].map(Failure(id, _)) orElse
           c.downField("result").as[Json].map(Success(id, _))
       case _                     => Left(DecodingFailure("Invalid payload", c.history))
-    }
 
 end JsonRPC2Types

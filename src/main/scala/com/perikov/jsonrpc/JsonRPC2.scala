@@ -62,10 +62,9 @@ object JsonRPC2:
         val processIncompingStream: Resource[F, Unit] =
           proto.notificationStream
             .map(parser.decode[Packet])
-            .flatMap {
+            .flatMap:
               case Right(packet) => Stream.emits(packet)
               case Left(_)       => Stream.empty // TODO: log
-            }
             .evalMap(processIncomingMessage)
             .unNone
             .through(topic.publish)
